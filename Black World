@@ -1,0 +1,456 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BlockWorld 3D</title>
+<style>
+body{margin:0;background:#17202b;color:white;font-family:Arial;text-align:center}
+header{padding:10px;background:#263b50}
+h1{color:#70ff70;margin:5px}
+button,select{padding:10px;margin:4px;border:0;border-radius:7px;font-weight:bold;cursor:pointer}
+#game{width:100%;height:70vh;display:block}
+#info{background:#263b50;padding:8px}
+#help{font-size:13px;color:#ddd}
+</style>
+</head>
+<body>
+<header>
+<h1>🌍 BLOCKWORLD 3D</h1>
+<p>Explore • Build • Create</p>
+</header>
+<div id="info">
+<button id="play">▶ PLAY / CLICK TO LOOK</button>
+<button id="fly">FLY: OFF</button>
+<button id="xray">X-RAY: OFF</button>
+<button onclick="changeWorld('Overworld')">🌳 Overworld</button>
+<button onclick="changeWorld('Nether')">🔥 Nether</button>
+<button onclick="changeWorld('End')">🐉 End</button>
+<select id="block">
+<option value="dirt">Dirt</option>
+<option value="stone">Stone</option>
+<option value="wood">Wood</option>
+<option value="gold">Gold</option>
+<option value="grass">Grass</option>
+</select>
+<p id="help">WASD = move | Mouse = look | Space = jump/fly up | Shift = fly down | Left click = mine | Right click = build</p>
+<p id="status">World: Overworld | Fly OFF | X-ray OFF</p>
+</div>
+<div id="game"></div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const holder=document.getElementById('game');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
+scene.fog=new THREE.Fog(0x87ceeb,15,55);
+
+const camera=new THREE.PerspectiveCamera(75,1,0.1,1000);
+camera.position.set(0,3,8);
+camera.rotation.order='YXZ';
+
+const renderer=new THREE.WebGLRenderer({antialias:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+holder.appendChild(renderer.domElement);
+
+function resize(){
+ const w=holder.clientWidth,h=holder.clientHeight;
+ camera.aspect=w/h;camera.updateProjectionMatrix();
+ renderer.setSize(w,h);
+}
+new ResizeObserver(resize).observe(holder);
+resize();
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x667755,2));
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(10,20,10);
+scene.add(sun);
+
+const materials={
+ grass:new THREE.MeshLambertMaterial({color:0x55b94b}),
+ dirt:new THREE.MeshLambertMaterial({color:0x986238}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888}),
+ wood:new THREE.MeshLambertMaterial({color:0x9b642e}),
+ gold:new THREE.MeshLambertMaterial({color:0xffd700})
+};
+const cube=new THREE.BoxGeometry(1,1,1);
+let blocks=[];
+let worldName='Overworld';
+let fly=false,xray=false;
+let yaw=0,pitch=0;
+let locked=false;
+const keys={};
+const raycaster=new THREE.Raycaster();
+const center=new THREE.Vector2(0,0);
+
+function addBlock(x,y,z,type){
+ const mesh=new THREE.Mesh(cube,materials[type]||materials.dirt);
+ mesh.position.set(x,y,z);
+ mesh.userData.type=type;
+ scene.add(mesh);blocks.push(mesh);
+ return mesh;
+}
+function clearWorld(){
+ for(const b of blocks)scene.remove(b);
+ blocks=[];
+}
+function changeWorld(name){
+ worldName=name;clearWorld();
+ if(name==='Overworld'){
+  scene.background.set(0x87ceeb);
+  scene.fog.color.set(0x87ceeb);
+ }else if(name==='Nether'){
+  scene.background.set(0x451616);
+  scene.fog.color.set(0x451616);
+ }else{
+  scene.background.set(0x21162e);
+  scene.fog.color.set(0x21162e);
+ }
+ for(let x=-12;x<=12;x++){
+  for(let z=-12;z<=12;z++){
+   let height= name==='End' ? (Math.random()>.88?2:0) :
+               name==='Nether' ? (Math.random()>.8?1:0) :
+               Math.random()>.85?1:0;
+   for(let y=-2;y<=height;y++){
+    let type=y===height?
+     (name==='Overworld'?'grass':name==='Nether'?'gold':'stone'):
+     (y===-2?'stone':'dirt');
+    addBlock(x,y,z,type);
+   }
+  }
+ }
+ camera.position.set(0,3,8);
+ yaw=0;pitch=0;
+ camera.rotation.set(0,0,0);
+ updateStatus();
+}
+function updateStatus(){
+ document.getElementById('status').textContent=
+ 'World: '+worldName+' | Fly '+(fly?'ON':'OFF')+
+ ' | X-ray '+(xray?'ON':'OFF');
+}
+document.getElementById('fly').onclick=()=>{
+ fly=!fly;
+ document.getElementById('fly').textContent='FLY: '+(fly?'ON':'OFF');
+ updateStatus();
+};
+document.getElementById('xray').onclick=()=>{
+ xray=!xray;
+ blocks.forEach(b=>{
+  b.material.transparent=xray;
+  b.material.opacity=xray?.35:1;
+ });
+ document.getElementById('xray').textContent='X-RAY: '+(xray?'ON':'OFF');
+ updateStatus();
+};
+window.changeWorld=changeWorld;
+
+document.getElementById('play').onclick=()=>{
+ renderer.domElement.requestPointerLock();
+};
+document.addEventListener('pointerlockchange',()=>{
+ locked=document.pointerLockElement===renderer.domElement;
+ document.getElementById('play').textContent=
+ locked?'MOUSE LOCKED — ESC TO UNLOCK':'▶ PLAY / CLICK TO LOOK';
+});
+document.addEventListener('mousemove',e=>{
+ if(!locked)return;
+ yaw-=e.movementX*.002;
+ pitch-=e.movementY*.002;
+ pitch=Math.max(-1.5,Math.min(1.5,pitch));
+ camera.rotation.set(pitch,yaw,0);
+});
+document.addEventListener('keydown',e=>{
+ keys[e.code]=true;
+ if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+
+function targetBlock(){
+ raycaster.setFromCamera(center,camera);
+ return raycaster.intersectObjects(blocks,false)[0];
+}
+document.addEventListener('mousedown',e=>{
+ if(!locked)return;
+ const hit=targetBlock();
+ if(!hit)return;
+ if(e.button===0){
+  scene.remove(hit.object);
+  blocks=blocks.filter(b=>b!==hit.object);
+ }else if(e.button===2){
+  const p=hit.object.position.clone().add(hit.face.normal);
+  const x=Math.round(p.x),y=Math.round(p.y),z=Math.round(p.z);
+  if(!blocks.some(b=>b.position.x===x&&b.position.y===y&&b.position.z===z)){
+   const type=document.getElementById('block').value;
+   const b=addBlock(x,y,z,type);
+   if(xray){b.material.transparent=true;b.material.opacity=.35;}
+  }
+ }
+});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+
+let velocityY=0;
+let onGround=false;
+function animate(){
+ requestAnimationFrame(animate);
+ const speed=.12;
+ const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+ const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+ let move=new THREE.Vector3();
+ if(keys.KeyW||keys.ArrowUp)move.add(forward);
+ if(keys.KeyS||keys.ArrowDown)move.sub(forward);
+ if(keys.KeyD||keys.ArrowRight)move.add(right);
+ if(keys.KeyA||keys.ArrowLeft)move.sub(right);
+ if(move.length()>0)move.normalize().multiplyScalar(speed);
+ camera.position.add(move);
+
+ if(fly){
+  if(keys.Space)camera.position.y+=speed;
+  if(keys.ShiftLeft||keys.ShiftRight)camera.position.y-=speed;
+ }else{
+  velocityY-=.012;
+  if(keys.Space&&onGround){velocityY=.19;onGround=false;}
+  camera.position.y+=velocityY;
+  if(camera.position.y<2.6){camera.position.y=2.6;velocityY=0;onGround=true;}
+ }
+ camera.position.x=Math.max(-12,Math.min(12,camera.position.x));
+ camera.position.z=Math.max(-12,Math.min(12,camera.position.z));
+ renderer.render(scene,camera);
+}
+changeWorld('Overworld');
+animate();
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BlockWorld 3D</title>
+<style>
+body{margin:0;background:#17202b;color:white;font-family:Arial;text-align:center}
+header{padding:10px;background:#263b50}
+h1{color:#70ff70;margin:5px}
+button,select{padding:10px;margin:4px;border:0;border-radius:7px;font-weight:bold;cursor:pointer}
+#game{width:100%;height:70vh;display:block}
+#info{background:#263b50;padding:8px}
+#help{font-size:13px;color:#ddd}
+</style>
+</head>
+<body>
+<header>
+<h1>🌍 BLOCKWORLD 3D</h1>
+<p>Explore • Build • Create</p>
+</header>
+<div id="info">
+<button id="play">▶ PLAY / CLICK TO LOOK</button>
+<button id="fly">FLY: OFF</button>
+<button id="xray">X-RAY: OFF</button>
+<button onclick="changeWorld('Overworld')">🌳 Overworld</button>
+<button onclick="changeWorld('Nether')">🔥 Nether</button>
+<button onclick="changeWorld('End')">🐉 End</button>
+<select id="block">
+<option value="dirt">Dirt</option>
+<option value="stone">Stone</option>
+<option value="wood">Wood</option>
+<option value="gold">Gold</option>
+<option value="grass">Grass</option>
+</select>
+<p id="help">WASD = move | Mouse = look | Space = jump/fly up | Shift = fly down | Left click = mine | Right click = build</p>
+<p id="status">World: Overworld | Fly OFF | X-ray OFF</p>
+</div>
+<div id="game"></div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const holder=document.getElementById('game');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
+scene.fog=new THREE.Fog(0x87ceeb,15,55);
+
+const camera=new THREE.PerspectiveCamera(75,1,0.1,1000);
+camera.position.set(0,3,8);
+camera.rotation.order='YXZ';
+
+const renderer=new THREE.WebGLRenderer({antialias:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+holder.appendChild(renderer.domElement);
+
+function resize(){
+ const w=holder.clientWidth,h=holder.clientHeight;
+ camera.aspect=w/h;camera.updateProjectionMatrix();
+ renderer.setSize(w,h);
+}
+new ResizeObserver(resize).observe(holder);
+resize();
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x667755,2));
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(10,20,10);
+scene.add(sun);
+
+const materials={
+ grass:new THREE.MeshLambertMaterial({color:0x55b94b}),
+ dirt:new THREE.MeshLambertMaterial({color:0x986238}),
+ stone:new THREE.MeshLambertMaterial({color:0x888888}),
+ wood:new THREE.MeshLambertMaterial({color:0x9b642e}),
+ gold:new THREE.MeshLambertMaterial({color:0xffd700})
+};
+const cube=new THREE.BoxGeometry(1,1,1);
+let blocks=[];
+let worldName='Overworld';
+let fly=false,xray=false;
+let yaw=0,pitch=0;
+let locked=false;
+const keys={};
+const raycaster=new THREE.Raycaster();
+const center=new THREE.Vector2(0,0);
+
+function addBlock(x,y,z,type){
+ const mesh=new THREE.Mesh(cube,materials[type]||materials.dirt);
+ mesh.position.set(x,y,z);
+ mesh.userData.type=type;
+ scene.add(mesh);blocks.push(mesh);
+ return mesh;
+}
+function clearWorld(){
+ for(const b of blocks)scene.remove(b);
+ blocks=[];
+}
+function changeWorld(name){
+ worldName=name;clearWorld();
+ if(name==='Overworld'){
+  scene.background.set(0x87ceeb);
+  scene.fog.color.set(0x87ceeb);
+ }else if(name==='Nether'){
+  scene.background.set(0x451616);
+  scene.fog.color.set(0x451616);
+ }else{
+  scene.background.set(0x21162e);
+  scene.fog.color.set(0x21162e);
+ }
+ for(let x=-12;x<=12;x++){
+  for(let z=-12;z<=12;z++){
+   let height= name==='End' ? (Math.random()>.88?2:0) :
+               name==='Nether' ? (Math.random()>.8?1:0) :
+               Math.random()>.85?1:0;
+   for(let y=-2;y<=height;y++){
+    let type=y===height?
+     (name==='Overworld'?'grass':name==='Nether'?'gold':'stone'):
+     (y===-2?'stone':'dirt');
+    addBlock(x,y,z,type);
+   }
+  }
+ }
+ camera.position.set(0,3,8);
+ yaw=0;pitch=0;
+ camera.rotation.set(0,0,0);
+ updateStatus();
+}
+function updateStatus(){
+ document.getElementById('status').textContent=
+ 'World: '+worldName+' | Fly '+(fly?'ON':'OFF')+
+ ' | X-ray '+(xray?'ON':'OFF');
+}
+document.getElementById('fly').onclick=()=>{
+ fly=!fly;
+ document.getElementById('fly').textContent='FLY: '+(fly?'ON':'OFF');
+ updateStatus();
+};
+document.getElementById('xray').onclick=()=>{
+ xray=!xray;
+ blocks.forEach(b=>{
+  b.material.transparent=xray;
+  b.material.opacity=xray?.35:1;
+ });
+ document.getElementById('xray').textContent='X-RAY: '+(xray?'ON':'OFF');
+ updateStatus();
+};
+window.changeWorld=changeWorld;
+
+document.getElementById('play').onclick=()=>{
+ renderer.domElement.requestPointerLock();
+};
+document.addEventListener('pointerlockchange',()=>{
+ locked=document.pointerLockElement===renderer.domElement;
+ document.getElementById('play').textContent=
+ locked?'MOUSE LOCKED — ESC TO UNLOCK':'▶ PLAY / CLICK TO LOOK';
+});
+document.addEventListener('mousemove',e=>{
+ if(!locked)return;
+ yaw-=e.movementX*.002;
+ pitch-=e.movementY*.002;
+ pitch=Math.max(-1.5,Math.min(1.5,pitch));
+ camera.rotation.set(pitch,yaw,0);
+});
+document.addEventListener('keydown',e=>{
+ keys[e.code]=true;
+ if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+
+function targetBlock(){
+ raycaster.setFromCamera(center,camera);
+ return raycaster.intersectObjects(blocks,false)[0];
+}
+document.addEventListener('mousedown',e=>{
+ if(!locked)return;
+ const hit=targetBlock();
+ if(!hit)return;
+ if(e.button===0){
+  scene.remove(hit.object);
+  blocks=blocks.filter(b=>b!==hit.object);
+ }else if(e.button===2){
+  const p=hit.object.position.clone().add(hit.face.normal);
+  const x=Math.round(p.x),y=Math.round(p.y),z=Math.round(p.z);
+  if(!blocks.some(b=>b.position.x===x&&b.position.y===y&&b.position.z===z)){
+   const type=document.getElementById('block').value;
+   const b=addBlock(x,y,z,type);
+   if(xray){b.material.transparent=true;b.material.opacity=.35;}
+  }
+ }
+});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+
+let velocityY=0;
+let onGround=false;
+function animate(){
+ requestAnimationFrame(animate);
+ const speed=.12;
+ const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+ const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+ let move=new THREE.Vector3();
+ if(keys.KeyW||keys.ArrowUp)move.add(forward);
+ if(keys.KeyS||keys.ArrowDown)move.sub(forward);
+ if(keys.KeyD||keys.ArrowRight)move.add(right);
+ if(keys.KeyA||keys.ArrowLeft)move.sub(right);
+ if(move.length()>0)move.normalize().multiplyScalar(speed);
+ camera.position.add(move);
+
+ if(fly){
+  if(keys.Space)camera.position.y+=speed;
+  if(keys.ShiftLeft||keys.ShiftRight)camera.position.y-=speed;
+ }else{
+  velocityY-=.012;
+  if(keys.Space&&onGround){velocityY=.19;onGround=false;}
+  camera.position.y+=velocityY;
+  if(camera.position.y<2.6){camera.position.y=2.6;velocityY=0;onGround=true;}
+ }
+ camera.position.x=Math.max(-12,Math.min(12,camera.position.x));
+ camera.position.z=Math.max(-12,Math.min(12,camera.position.z));
+ renderer.render(scene,camera);
+}
+changeWorld('Overworld');
+animate();
+</script>
+</body>
+</html>
