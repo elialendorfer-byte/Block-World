@@ -3,125 +3,199 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BlockWorld</title>
 <style>
+*{box-sizing:border-box}
 body{margin:0;overflow:hidden;font-family:Arial}
-#hud{position:fixed;top:12px;left:12px;color:white;
-background:#17212bcc;padding:12px;border-radius:10px;z-index:2}
-#hotbar{position:fixed;bottom:18px;left:50%;
-transform:translateX(-50%);display:flex;gap:5px;z-index:2}
-.slot{width:43px;height:43px;background:#333d;
-border:2px solid white;color:white;display:grid;
-place-items:center;font-size:22px}
-#admin{display:none;position:fixed;right:12px;top:12px;
-background:#17212b;color:white;padding:15px;
-border:3px solid gold;border-radius:12px;z-index:4}
-button{padding:9px;margin:4px}
-#help{position:fixed;bottom:75px;left:12px;color:white;
-background:#222b;padding:8px;z-index:2}
+#top{position:fixed;top:0;width:100%;z-index:5;
+background:#263e53;color:white;text-align:center;padding:10px}
+h1{color:#65ff72;margin:0}
+#controls{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin:10px}
+button,select{padding:9px;border:0;border-radius:6px;font-weight:bold}
+#hud{position:fixed;top:155px;left:12px;color:white;
+background:#17212bcc;padding:12px;border-radius:8px;z-index:4}
+#hotbar{position:fixed;bottom:15px;left:50%;
+transform:translateX(-50%);display:flex;gap:4px;z-index:4}
+.slot{width:43px;height:43px;background:#253344dd;border:2px solid white;
+color:white;display:grid;place-items:center;font-size:22px}
+.selected{border:3px solid gold}
+#owner{display:none;position:fixed;right:12px;top:155px;
+background:#17212b;color:white;padding:15px;border:3px solid gold;
+border-radius:10px;z-index:8}
+#help{position:fixed;bottom:70px;left:12px;color:white;
+background:#17212bcc;padding:8px;z-index:4;font-size:12px}
 </style>
 </head>
 <body>
-<div id="hud">
-<b>🌍 BLOCKWORLD</b><br>
-❤️ Health: <span id="health">10</span>/10<br>
-🍗 Hunger: <span id="hunger">10</span>/10<br>
-🧱 Blocks: <span id="count">64</span><br>
-👑 Owner: Elia
+
+<div id="top">
+<h1>🌍 BLOCKWORLD</h1>
+<p>ONE HUGE OVERWORLD • EXPLORE • BUILD • SURVIVE</p>
+<div id="controls">
+<button id="lock">CLICK TO PLAY</button>
+<button id="fly">FLY: OFF</button>
+<button id="xray">X-RAY: OFF</button>
+<select id="block">
+<option value="0">Grass</option><option value="1">Dirt</option>
+<option value="2">Stone</option><option value="3">Wood</option>
+<option value="4">Leaves</option><option value="5">Sand</option>
+<option value="6">Snow</option><option value="7">Gold</option>
+</select>
+<button onclick="toggleOwner()">👑 OWNER</button>
+</div>
+<div>WASD: Move | Mouse: Look | Space: Jump | Click: Mine | Right-click: Build</div>
 </div>
 
-<div id="help">
-WASD: Move | SPACE: Jump<br>
-Mouse: Look | Click: Mine<br>
-Right click: Build | O: Owner panel
+<div id="hud">
+<b>BLOCKWORLD</b><br>
+❤️ Health: <span id="hp">10</span>/10<br>
+🍗 Hunger: <span id="food">10</span>/10<br>
+🧱 Blocks: <span id="amount">64</span>
 </div>
+
+<div id="help">1–8 select blocks<br>O = Owner Panel<br>F = Fly</div>
 
 <div id="hotbar">
-<div class="slot">🟩</div><div class="slot">🟫</div>
+<div class="slot selected">🟩</div><div class="slot">🟫</div>
 <div class="slot">🪨</div><div class="slot">🪵</div>
-<div class="slot">🌳</div><div class="slot">🟦</div>
-<div class="slot">🟨</div><div class="slot">🟥</div>
-<div class="slot">⬜</div>
+<div class="slot">🌿</div><div class="slot">🏖️</div>
+<div class="slot">❄️</div><div class="slot">🟨</div>
 </div>
 
-<div id="admin">
-<h2>👑 OWNER PANEL</h2>
-<button onclick="fly=!fly">Toggle Fly</button>
-<button onclick="infinite=!infinite">Infinite Blocks</button>
+<div id="owner">
+<h3>👑 BLOCKWORLD OWNER</h3>
+<button onclick="flyMode=!flyMode;updateButtons()">Toggle Fly</button>
+<button onclick="infinite=!infinite;updateHUD()">Infinite Blocks</button>
 <button onclick="blocks=999999;updateHUD()">Give Blocks</button>
-<button onclick="health=10;hunger=10;updateHUD()">Restore Stats</button>
-<button onclick="document.getElementById('admin').style.display='none'">Close</button>
+<button onclick="health=10;hunger=10;updateHUD()">Restore Health</button>
+<button onclick="document.getElementById('owner').style.display='none'">Close</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-const OWNER="elialendorfer-byte";
-const player={username:OWNER};
-
-let fly=false,infinite=false,blocks=64;
-let health=10,hunger=10;
-
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x87ceeb);
-scene.fog=new THREE.Fog(0x87ceeb,25,100);
+scene.fog=new THREE.Fog(0x87ceeb,35,120);
 
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,1000);
 const renderer=new THREE.WebGLRenderer({antialias:false});
 renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xffffff,0x667744,2));
 const sun=new THREE.DirectionalLight(0xffffff,2);
-sun.position.set(10,20,10);scene.add(sun);
+sun.position.set(20,30,10);scene.add(sun);
 
-const colors=[0x55aa33,0x80603c,0x888888,0x3366aa,0xcccccc];
-const materials=colors.map(c=>new THREE.MeshLambertMaterial({color:c}));
-const geometry=new THREE.BoxGeometry(1,1,1);
-const world=[];
-
-function addBlock(x,y,z,type=0){
- const m=new THREE.Mesh(geometry,materials[type]);
- m.position.set(x,y,z);scene.add(m);world.push(m);
-}
-
-for(let x=-20;x<=20;x++){
- for(let z=-20;z<=20;z++){
-  addBlock(x,0,z,0);
-  if(Math.random()<.025){
-   for(let y=1;y<=3;y++)addBlock(x,y,z,1);
-   for(let dx=-1;dx<=1;dx++)
-    for(let dz=-1;dz<=1;dz++)
-     addBlock(x+dx,4,z+dz,0);
-  }
- }
-}
-
-// Cabin
-for(let x=-3;x<=3;x++){
- for(let z=-3;z<=3;z++){
-  if(x===-3||x===3||z===-3||z===3){
-   addBlock(x,1,z,1);addBlock(x,2,z,1);
-  }
- }
-}
-for(let x=-3;x<=3;x++)for(let z=-3;z<=3;z++)addBlock(x,3,z,1);
-
-const pos=new THREE.Vector3(0,2,6);
+const colors=[0x55bb44,0x805332,0x888888,0x996633,
+0x287d28,0xd9c28b,0xffffff,0xffcc22];
+const mats=colors.map(c=>new THREE.MeshLambertMaterial({color:c}));
+const box=new THREE.BoxGeometry(1,1,1);
+let world=[],blocks=64,selected=0,flyMode=false,xray=false,infinite=false;
+let health=10,hunger=10;
+const pos=new THREE.Vector3(0,4,8);
 let yaw=0,pitch=0,vy=0,onGround=false;
 const keys={};
 
+function addBlock(x,y,z,type){
+ const m=new THREE.Mesh(box,mats[type]);
+ m.position.set(x,y,z);m.userData.type=type;
+ scene.add(m);world.push(m);return m;
+}
+
+function tree(x,z){
+ for(let y=1;y<=4;y++)addBlock(x,y,z,3);
+ for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)
+ for(let y=3;y<=5;y++)
+ if(Math.abs(dx)+Math.abs(dz)<4)addBlock(x+dx,y,z+dz,4);
+}
+
+function house(x,z){
+ for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)
+ if(Math.abs(dx)===2||Math.abs(dz)===2)
+ for(let y=1;y<=3;y++)addBlock(x+dx,y,z+dz,3);
+ for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)
+ addBlock(x+dx,4,z+dz,1);
+}
+
+// Generate one connected Overworld with different biomes
+for(let x=-35;x<=35;x++){
+ for(let z=-35;z<=35;z++){
+  let biome;
+  if(x<-18)biome="snow";
+  else if(x>19)biome="desert";
+  else if(z>18)biome="ocean";
+  else if(z<-18)biome="forest";
+  else biome="plains";
+
+  let h=Math.floor(Math.sin(x*.22)*2+Math.cos(z*.2)*2);
+  let top=biome==="snow"?6:biome==="desert"?5:biome==="ocean"?0:0;
+  if(biome==="snow")h+=3;
+  if(biome==="desert")h+=1;
+
+  let surface=biome==="snow"?6:biome==="desert"||biome==="ocean"?5:0;
+  for(let y=-3;y<=h;y++)
+   addBlock(x,y,z,y===h?surface:y===h-1?1:2);
+
+  if(biome==="forest"&&Math.random()<.07)tree(x,z);
+  if(biome==="plains"&&Math.random()<.012)house(x,z);
+ }
+}
+
+// Add hills and rocky cave entrance
+for(let y=-1;y<=2;y++){
+ for(let z=-2;z<=2;z++){
+  let m=addBlock(-8,y,z,2);
+  if(y>=0&&z>=-1&&z<=1){
+   scene.remove(m);world.splice(world.indexOf(m),1);
+  }
+ }
+}
+
+function updateHUD(){
+ document.getElementById("amount").textContent=infinite?"∞":blocks;
+ document.getElementById("hp").textContent=health;
+ document.getElementById("food").textContent=hunger;
+}
+function updateButtons(){
+ document.getElementById("fly").textContent="FLY: "+(flyMode?"ON":"OFF");
+ document.getElementById("xray").textContent="X-RAY: "+(xray?"ON":"OFF");
+}
+function toggleOwner(){
+ let p=document.getElementById("owner");
+ p.style.display=p.style.display==="none"?"block":"none";
+}
+
+document.getElementById("fly").onclick=()=>{flyMode=!flyMode;updateButtons()};
+document.getElementById("xray").onclick=()=>{
+ xray=!xray;
+ mats.forEach(m=>{m.transparent=xray;m.opacity=xray?.4:1});
+ updateButtons();
+};
+document.getElementById("block").onchange=e=>selected=Number(e.target.value);
+document.querySelectorAll(".slot").forEach((s,i)=>{
+ s.onclick=()=>{
+  selected=i;
+  document.getElementById("block").value=i;
+  document.querySelectorAll(".slot").forEach((v,j)=>v.classList.toggle("selected",j===i));
+ };
+});
 document.addEventListener("keydown",e=>{
  keys[e.key.toLowerCase()]=true;
- if(e.key.toLowerCase()==="o" && player.username===OWNER){
-  const p=document.getElementById("admin");
-  p.style.display=p.style.display==="none"?"block":"none";
+ if(e.key.toLowerCase()==="o")toggleOwner();
+ if(e.key.toLowerCase()==="f"){flyMode=!flyMode;updateButtons()}
+ if(e.key>="1"&&e.key<="8"){
+  selected=Number(e.key)-1;
+  document.getElementById("block").value=selected;
+  document.querySelectorAll(".slot").forEach((v,j)=>v.classList.toggle("selected",j===selected));
  }
- if(e.key.toLowerCase()==="f" && player.username===OWNER)fly=!fly;
 });
 document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
+document.getElementById("lock").onclick=()=>renderer.domElement.requestPointerLock();
 renderer.domElement.addEventListener("click",()=>{
+ if(document.pointerLockElement!==renderer.domElement)
  renderer.domElement.requestPointerLock();
 });
 document.addEventListener("mousemove",e=>{
@@ -131,52 +205,44 @@ document.addEventListener("mousemove",e=>{
   pitch=Math.max(-1.5,Math.min(1.5,pitch));
  }
 });
-
-function hitBlock(){
+function target(){
  const ray=new THREE.Raycaster();
  ray.setFromCamera(new THREE.Vector2(0,0),camera);
  return ray.intersectObjects(world)[0];
 }
 document.addEventListener("mousedown",e=>{
  if(document.pointerLockElement!==renderer.domElement)return;
- const hit=hitBlock();if(!hit)return;
+ const hit=target();if(!hit)return;
  if(e.button===0){
   scene.remove(hit.object);
   world.splice(world.indexOf(hit.object),1);
   if(!infinite)blocks++;
  }
- if(e.button===2 && (infinite||blocks>0)){
+ if(e.button===2&&(infinite||blocks>0)){
   const p=hit.object.position.clone().add(hit.face.normal);
-  addBlock(Math.round(p.x),Math.round(p.y),Math.round(p.z),1);
+  addBlock(Math.round(p.x),Math.round(p.y),Math.round(p.z),selected);
   if(!infinite)blocks--;
  }
  updateHUD();
 });
 document.addEventListener("contextmenu",e=>e.preventDefault());
 
-function updateHUD(){
- document.getElementById("count").textContent=infinite?"∞":blocks;
- document.getElementById("health").textContent=health;
- document.getElementById("hunger").textContent=hunger;
-}
-
 function animate(){
  requestAnimationFrame(animate);
- const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
- const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
- const speed=.13;
- if(keys.w||keys.arrowup)pos.addScaledVector(forward,speed);
- if(keys.s||keys.arrowdown)pos.addScaledVector(forward,-speed);
- if(keys.a||keys.arrowleft)pos.addScaledVector(right,-speed);
- if(keys.d||keys.arrowright)pos.addScaledVector(right,speed);
-
- if(fly){
+ const f=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+ const r=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+ const speed=.14;
+ if(keys.w||keys.arrowup)pos.addScaledVector(f,speed);
+ if(keys.s||keys.arrowdown)pos.addScaledVector(f,-speed);
+ if(keys.a||keys.arrowleft)pos.addScaledVector(r,-speed);
+ if(keys.d||keys.arrowright)pos.addScaledVector(r,speed);
+ if(flyMode){
   if(keys.space)pos.y+=speed;
   if(keys.shift)pos.y-=speed;
  }else{
-  if(keys.space&&onGround){vy=.18;onGround=false}
+  if(keys.space&&onGround){vy=.2;onGround=false}
   vy-=.009;pos.y+=vy;
-  if(pos.y<2){pos.y=2;vy=0;onGround=true}
+  if(pos.y<3){pos.y=3;vy=0;onGround=true}
  }
  camera.position.copy(pos);
  camera.rotation.order="YXZ";
@@ -184,7 +250,6 @@ function animate(){
  renderer.render(scene,camera);
 }
 animate();
-
 window.addEventListener("resize",()=>{
  camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();
